@@ -1,0 +1,42 @@
+{   
+    "default": {
+        "firstScene": "interior",       
+        "sceneFadeDuration": 1000,
+        "autoload": true
+    },
+    
+    "scenes": {
+        "interior": {
+            "title": "Hub Interior", 
+            "yaw": 45,
+            "type": "equirectangular",
+            "panorama": "img/viewerimage.jpg",
+            "hotSpots": [
+                {
+                    "pitch": -2.1,
+                    "yaw": 59,
+                    "type": "scene",
+                    "text": "Hub Exterior",
+                    "sceneId": "exterior"
+                }
+            ]
+        },
+
+        "exterior": {
+            "title": "Hub Exterior",
+            "hfov": 110,
+            "yaw": 160,
+            "type": "equirectangular",
+            "panorama": "img/viewerimage2.jpg",
+            "hotSpots": [
+                {
+                    "pitch": 1,
+                    "yaw": -156,
+                    "type": "scene",
+                    "text": "Hub Interior",
+                    "sceneId": "interior"                   
+                }
+            ]
+        }
+    }
+}
