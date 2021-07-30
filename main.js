@@ -176,13 +176,13 @@ function closeNav() {
               });
 
               cabLayer.queryExtent(queryExtent).then(function(result) {
-                view.goTo(new_ext.expand(3), { speedFactor: 0.5 });                        
+                view.goTo(new_ext.expand(4), { speedFactor: 0.5 });                        
               });
 
               // reduce popup size
               $(function() {            
                   $("body:not(.esriIsPhoneSize) #viewDiv .esri-popup.esri-popup--is-docked .esri-popup__main-container").css('padding-bottom', '0px');                
-                });
+              });
               
               // if any, remove the previous highlights
               if (highlight) {
@@ -290,6 +290,23 @@ function closeNav() {
     viewer.show();
   });
 
+  // listen for changes to the sidebar element
+  var observer = new MutationObserver(function(mutations) {
+    mutations.forEach(function(mutationRecord) {
+      // if the sidebar opens, hide the view item list button      
+      if (mutationRecord.target.style.width == "25%") {
+        view.popup.viewModel.allActions.getItemAt(0).visible = false;
+        $("body:not(.esriIsPhoneSize) #viewDiv .esri-popup.esri-popup--is-docked .esri-popup__main-container").css('padding-bottom', '0px');        
+      } else {
+        view.popup.viewModel.allActions.getItemAt(0).visible = true; 
+        $("body:not(.esriIsPhoneSize) #viewDiv .esri-popup.esri-popup--is-docked .esri-popup__main-container").css('padding-bottom', '55px'); 
+      }       
+    });    
+  });
+
+  var target = document.getElementById('mySidebar');
+  observer.observe(target, { attributes : true, attributeFilter : ['style'] });
+
   // when the user clicks the previous button, show the previous record in the table
   $(document).on('click','.previous', function(){    
     var selected = table.getSelectedRows();
@@ -354,7 +371,7 @@ function closeNav() {
       columns:[
           {title:"Title", field:"attributes.TITLE", width: 500},
           {title:"Author", field:"attributes.AUTHOR", width: 300, visible:false},
-          {title:"Publisher", field:"attributes.PUBLISHER", width: 300},
+          {title:"Publisher", field:"attributes.PUBLISHER", width: 300, visible: false},
           {title:"Date", field:"attributes.DATE", width: 150},
           {title:"Scale", field:"attributes.SCALE", width: 120, visible:false},
           //{title:"Catalog Item", field:"attributes.CATALOG_LINK", width: 400, formatter:"link", formatterParams:{                   
@@ -364,7 +381,8 @@ function closeNav() {
           {title:"Language", field:"attributes.LANG", width: 150, visible:false},
           {title:"Theme", field:"attributes.THEME", width: 150, visible:false},
           {title:"Region / Geography", field:"attributes.GEO", width: 200, visible:false},                
-          {title:"Drawer ID", field:"attributes.LOC_ID", width: 120, visible:false},                         
+          {title:"Drawer ID", field:"attributes.LOC_ID", width: 120, visible:false},   
+          {title:"Location", field:"attributes.LOC_TYPE", width: 120, visible:false},                      
       ],            
       // Detect when someone clicks on a row in the table
       rowClick:function(e, row){ 
@@ -373,7 +391,11 @@ function closeNav() {
         $('#drawerModal').modal('hide');        
         // when a row in the table is clicked call the getRowData function
         getRowData(row);   
-      }    
+      },
+      groupHeader:function(value, count, data, group){
+        console.log(data);
+        return "Drawer: " + value + "<span style='color:#d00; margin-left:10px;'>(" + count + " items)</span>";
+      },    
   });        
   
   //trigger download of mapdata.csv file
@@ -412,7 +434,7 @@ function closeNav() {
 
           view.hitTest(event, { include: [cabLayer, shelfLayer] }).then(function(response) {            
             // check if a feature is returned from the cabLayer
-            if (response.results.length) {                                 
+            if (response.results.length) {                          
               $(".esri-icon-table").hide();
               $("#drawerTitle").hide();
               const graphic = response.results[0].graphic;
@@ -437,16 +459,16 @@ function closeNav() {
                             title: "<h6>Shelf ID: " + drawerId,
                             content: "Description: " + "N/A" + "<br><br>Inventory coming soon!"                         
                          };
-                         //$('#noDataModal').modal('show');
-                         //view.popup.close();
+
+                         table.clearData();
+                         $('#results').html("Inventory coming soon!");                         
                        } else {
                          // show the cabinet info div
                          $("#drawerTitle").show(); 
                          $("#maxResults").hide();
                          console.log(data.features);
                          // Get the features from the REST API 
-                         features = data.features;     
-                         //$('#drawerModal').modal('show');                            
+                         features = data.features;                                                    
                          var numResults = data.features.length;
                          var startCallNo = data.features[0].attributes.CALL_NUM;
                          var endCallNo = data.features[numResults - 1].attributes.CALL_NUM;   
@@ -472,7 +494,17 @@ function closeNav() {
 
                          $('#results').html(" | Item count: " + numResults + " items");  
                          // clear any existing data in the table upon a new drawer click
-                         table.clearData();                             
+                         table.clearData();
+                         // if the sidebar is open, remove the 'view item list' button   
+                         if (document.getElementById('mySidebar').style.width == "25%") {
+                          view.popup.viewModel.allActions.getItemAt(0).visible = false;
+                           $("body:not(.esriIsPhoneSize) #viewDiv .esri-popup.esri-popup--is-docked .esri-popup__main-container").css('padding-bottom', '0px');
+                           // set the table data to the results of the query
+                           table.setData(features);
+                         } else {
+                          view.popup.viewModel.allActions.getItemAt(0).visible = true; 
+                           $("body:not(.esriIsPhoneSize) #viewDiv .esri-popup.esri-popup--is-docked .esri-popup__main-container").css('padding-bottom', '56px');
+                         }                      
                        }
                       }
               });   
@@ -502,12 +534,24 @@ function closeNav() {
 
   function highLightDrawers (results) {
     var objectIds = [];
+
     results.forEach(function(result) {
-      var drawers = result.attributes.LOC_ID;      
+      // the result of the REST API Query
+      var drawers = result.attributes.LOC_ID;    
+      var titles = result.attributes.DRAWER_TITLE; 
       objectIds.push(drawers);
     });
 
+    var occurrences = { };
+for (var i = 0, j = objectIds.length; i < j; i++) {
+   occurrences[objectIds[i]] = (occurrences[objectIds[i]] || 0) + 1;
+}
+
+console.log(occurrences);   
+
     var uniqueIds = [...new Set(objectIds)];
+    var recCount = results.length;
+    var drawerCount = uniqueIds.length;
     console.log(objectIds);
     console.log(uniqueIds);
     var drawerQuery = uniqueIds.join(" OR LOC_ID = ");
@@ -553,7 +597,7 @@ function closeNav() {
               });
 
               cabLayer.queryExtent(queryExtent).then(function(result) {
-                view.goTo(new_ext.expand(3), { speedFactor: 0.5 });                        
+                view.goTo(new_ext.expand(14), { speedFactor: 0.5 });                        
               });
               
               // if any, remove the previous highlights
@@ -566,10 +610,9 @@ function closeNav() {
               // open a popup at the drawer location of the selected map
               view.popup.open({
                 // Set the popup's title to the coordinates of the clicked location                          
-                title: "<h6><b>Search Results are located in XXXXX... test</b>", 
-               // content: "The item " + '"<b>' + row._row.data.attributes.TITLE + '</b>" ' + "is located in Shelf " + drawerId + ".",
-                location: response.features[0].geometry.centroid,// Set the location of the popup to the clicked location  
-                actions: [returnToAction]      
+                title: "<h6><b>" + recCount + " items in " + drawerCount + " locations", 
+                content: "Results shown in the sidebar. Click any record for more information.",
+                location: response.features[0].geometry.centroid,// Set the location of the popup to the clicked location                      
               });
          });
   }
@@ -605,13 +648,15 @@ function closeNav() {
                  if (numResults >= 2000) {
                    $("#maxResults").show();
                  } else {
-                  $("#maxResults").hide();
+                   $("#maxResults").hide();
                  }
                  $('#results').html(numResults + " items found for " + '"' + searchVal + '"');                  
                  // Create a new table with the array of features 
                  table.setData(searchRes);
                  console.log(searchRes);
                  highLightDrawers(searchRes);
+                 table.setSort("attributes.LOC_ID", "asc")
+                 table.setGroupBy("attributes.LOC_ID");
                 }
               }
       });  
